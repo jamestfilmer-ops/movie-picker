@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>The Lindell Movie Picker</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 via CDN -->
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <!-- Babel for JSX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: linear-gradient(180deg, #fafaf9 0%, #f5f0e8 100%); min-height: 100vh; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .animate-spin { animation: spin 1s linear infinite; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeIn 0.2s ease-out; }
+    .fade-in { animation: fadeIn 0.2s ease-out; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useCallback, useMemo, useRef, useEffect } = React;
+
+// Inline SVG Icon Components (replacing lucide-react)
+const Icon = ({d, className="w-5 h-5", ...props}) => React.createElement('svg', {xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",className,...props}, React.createElement('path',{d}));
+const Upload = (p) => Icon({d:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12",...p});
+const FileText = (p) => React.createElement('svg',{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",className:p.className||"w-5 h-5",...p},React.createElement('path',{d:"M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"}),React.createElement('polyline',{points:"14 2 14 8 20 8"}),React.createElement('line',{x1:16,y1:13,x2:8,y2:13}),React.createElement('line',{x1:16,y1:17,x2:8,y2:17}),React.createElement('line',{x1:10,y1:9,x2:8,y2:9}));
+const Film = (p) => React.createElement('svg',{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",className:p.className||"w-5 h-5"},React.createElement('rect',{width:20,height:20,x:2,y:2,rx:2.18,ry:2.18}),React.createElement('line',{x1:7,y1:2,x2:7,y2:22}),React.createElement('line',{x1:17,y1:2,x2:17,y2:22}),React.createElement('line',{x1:2,y1:12,x2:22,y2:12}));
+const Search = (p) => React.createElement('svg',{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",className:p.className||"w-5 h-5"},React.createElement('circle',{cx:11,cy:11,r:8}),React.createElement('line',{x1:21,y1:21,x2:16.65,y2:16.65}));
+const Shuffle = (p) => Icon({d:"M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5",...p});
+const Loader2 = (p) => Icon({d:"M21 12a9 9 0 1 1-6.219-8.56",...p});
+const ArrowLeft = (p) => Icon({d:"M19 12H5M12 19l-7-7 7-7",...p});
+const ArrowRight = (p) => Icon({d:"M5 12h14M12 5l7 7-7 7",...p});
+const RefreshCw = (p) => React.createElement('svg',{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",className:p.className||"w-5 h-5"},React.createElement('path',{d:"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"}),React.createElement('path',{d:"M21 3v5h-5"}),React.createElement('path',{d:"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"}),React.createElement('path',{d:"M3 21v-5h5"}));
+const ChevronDown = (p) => Icon({d:"M6 9l6 6 6-6",...p});
+const ChevronUp = (p) => Icon({d:"M18 15l-6-6-6 6",...p});
+const ChevronLeft = (p) => Icon({d:"M15 18l-6-6 6-6",...p});
+const ChevronRight = (p) => Icon({d:"M9 18l6-6-6-6",...p});
+const Shield = (p) => Icon({d:"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",...p});
+const Star = (p) => Icon({d:"M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",...p});
+const Award = (p) => React.createElement('svg',{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",className:p.className||"w-5 h-5"},React.createElement('circle',{cx:12,cy:8,r:6}),React.createElement('path',{d:"M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"}));
+const Clock = (p) => React.createElement('svg',{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",className:p.className||"w-5 h-5"},React.createElement('circle',{cx:12,cy:12,r:10}),React.createElement('polyline',{points:"12 6 12 12 16 14"}));
+const Calendar = (p) => React.createElement('svg',{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",className:p.className||"w-5 h-5"},React.createElement('rect',{width:18,height:18,x:3,y:4,rx:2,ry:2}),React.createElement('line',{x1:16,y1:2,x2:16,y2:6}),React.createElement('line',{x1:8,y1:2,x2:8,y2:6}),React.createElement('line',{x1:3,y1:10,x2:21,y2:10}));
+const Filter = (p) => Icon({d:"M22 3H2l8 9.46V19l4 2v-8.54L22 3",...p});
+const X = (p) => Icon({d:"M18 6 6 18M6 6l12 12",...p});
+const ExtLink = (p) => React.createElement('svg',{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",className:p.className||"w-5 h-5"},React.createElement('path',{d:"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"}),React.createElement('polyline',{points:"15 3 21 3 21 9"}),React.createElement('line',{x1:10,y1:14,x2:21,y2:3}));
+
+
+/* ════════════════════════════════════════════════════════════
+   CONSTANTS & CONFIG
+   ════════════════════════════════════════════════════════════ */
+const TMDB_KEY = "a20688a723e8c7dd1bef2c2cf21ea3eb";
+const OMDB_KEY = "5d2291bb";
+const TMDB_BASE = "https://api.themoviedb.org/3";
+const TMDB_IMG = "https://image.tmdb.org/t/p";
+const FONT = `Georgia, 'Times New Roman', serif`;
+
+const TMDB_GENRES = {28:"Action",12:"Adventure",16:"Animation",35:"Comedy",80:"Crime",99:"Documentary",18:"Drama",10751:"Family",14:"Fantasy",36:"History",27:"Horror",10402:"Music",9648:"Mystery",10749:"Romance",878:"Sci-Fi",10770:"TV Movie",53:"Thriller",10752:"War",37:"Western"};
+const PROVIDER_MAP = {netflix:[8],prime:[9,119],apple:[2,350],hulu:[15],max:[384,1899],disney:[337],peacock:[386,387],paramount:[531],tcm:[361],kanopy:[191]};
+const GENRE_MAP = {action:[28,12],drama:[18],comedy:[35],thriller:[53,9648,80],scifi:[878,14],war_history:[10752,36],horror:[27],romance:[10749],bio:[36,99],western:[37],skip:[]};
+const LIGHT_FUN = new Set([35,12,10751,16]);
+const HEAVY_DARK = new Set([18,10752,27,80]);
+const FEEL_GOOD = new Set([35,10749,12,10751,16]);
+
+const QUOTES = [
+  {q:"Here's looking at you, kid.",f:"Casablanca",y:1942},{q:"May the Force be with you.",f:"Star Wars",y:1977},
+  {q:"There's no place like home.",f:"The Wizard of Oz",y:1939},{q:"I'll be back.",f:"The Terminator",y:1984},
+  {q:"Frankly, my dear, I don't give a damn.",f:"Gone with the Wind",y:1939},
+  {q:"I'm gonna make him an offer he can't refuse.",f:"The Godfather",y:1972},
+  {q:"You can't handle the truth!",f:"A Few Good Men",y:1992},{q:"E.T. phone home.",f:"E.T.",y:1982},
+  {q:"Life is like a box of chocolates.",f:"Forrest Gump",y:1994},{q:"To infinity and beyond!",f:"Toy Story",y:1995},
+  {q:"Why so serious?",f:"The Dark Knight",y:2008},{q:"Roads? Where we're going we don't need roads.",f:"Back to the Future",y:1985},
+  {q:"Houston, we have a problem.",f:"Apollo 13",y:1995},{q:"You had me at hello.",f:"Jerry Maguire",y:1996},
+  {q:"I feel the need—the need for speed.",f:"Top Gun",y:1986},{q:"Nobody puts Baby in a corner.",f:"Dirty Dancing",y:1987},
+  {q:"After all, tomorrow is another day.",f:"Gone with the Wind",y:1939},{q:"The stuff that dreams are made of.",f:"The Maltese Falcon",y:1941},
+  {q:"You talking to me?",f:"Taxi Driver",y:1976},{q:"I see dead people.",f:"The Sixth Sense",y:1999},
+  {q:"Keep your friends close, but your enemies closer.",f:"The Godfather Part II",y:1974},
+  {q:"My mama always said life was like a box of chocolates.",f:"Forrest Gump",y:1994},
+];
+
+/* ════════════════════════════════════════════════════════════
+   QUIZ QUESTIONS (exact match to Base44)
+   ════════════════════════════════════════════════════════════ */
+const QZ = [
+  {id:"who",label:"WHO'S WATCHING",question:"Who's on the couch tonight?",exclusive:true,options:[
+    {label:"🎧 Just me — solo time",value:"solo"},{label:"💑 Me and my wife",value:"wife"},
+    {label:"👨‍👩‍👧 Family movie night",value:"family"},{label:"🍕 Friends are over",value:"friends"}]},
+  {id:"wife_likes",label:"WIFE'S TASTE",question:"What kind of movies does your wife usually enjoy?",showIf:a=>(a.who||[]).includes("wife"),multi:true,options:[
+    {label:"🌹 Romance, drama, emotional stories",value:"romance_drama"},{label:"😂 Comedy — she wants to laugh",value:"comedy"},
+    {label:"🔍 Thriller, suspense, mystery",value:"thriller"},{label:"🗺️ Adventure, action, spectacle",value:"adventure"},
+    {label:"🤙 She's open to anything good",value:"open"}]},
+  {id:"wife_avoids",label:"WIFE'S DEALBREAKER",question:"What makes your wife grab her phone?",showIf:a=>(a.who||[]).includes("wife"),multi:true,options:[
+    {label:"😴 Too slow or boring",value:"slow"},{label:"🩸 Too violent or gory",value:"violent"},
+    {label:"😰 Too scary or disturbing",value:"scary"},{label:"😢 Too depressing",value:"sad"},
+    {label:"🎭 Too weird or artsy",value:"weird"},{label:"💪 Nothing — she's a trooper",value:"none"}]},
+  {id:"my_mood",label:"YOUR MOOD",question:"What are YOU in the mood for?",exclusive:true,options:[
+    {label:"🤣 Make me laugh",value:"laugh"},{label:"🧠 Something that'll stick with me",value:"think"},
+    {label:"💔 Hit me in the feelings",value:"feel"},{label:"⚡ Edge-of-my-seat tension",value:"intense"},
+    {label:"🎲 No idea — surprise me",value:"surprise"}]},
+  {id:"time",label:"RUNTIME",question:"How much time before you fall asleep?",exclusive:true,options:[
+    {label:"⏱️ Under 100 min — keep it tight",value:"short"},{label:"🕐 About 2 hours",value:"medium"},
+    {label:"🎬 Going epic — 2.5+ hours",value:"long"},{label:"♾️ Doesn't matter if it's good",value:"any"}]},
+  {id:"streaming",label:"STREAMING",question:"What streaming services do you have? (Select all)",multi:true,hasAny:true,options:[
+    {label:"🟥 Netflix",value:"netflix"},{label:"📦 Amazon Prime Video",value:"prime"},{label:"🍎 Apple TV+",value:"apple"},
+    {label:"🟩 Hulu",value:"hulu"},{label:"🟪 Max (HBO)",value:"max"},{label:"🏰 Disney+",value:"disney"},
+    {label:"🦚 Peacock",value:"peacock"},{label:"⛰️ Paramount+",value:"paramount"},{label:"📺 Watch TCM",value:"tcm"},
+    {label:"📚 Kanopy",value:"kanopy"},{label:"💳 I'll rent if needed — include all movies",value:"rent",isAny:true}]},
+  {id:"decade",label:"ERA",question:"Pick your decade(s):",multi:true,hasAny:true,options:[
+    {label:"🌐 Any era is fine",value:"any",isAny:true},{label:"📽️ 1920s — Silent era",value:"1920s"},
+    {label:"🎩 1930s — Golden Age begins",value:"1930s"},{label:"🎖️ 1940s — War era classics",value:"1940s"},
+    {label:"🎞️ 1950s — Technicolor dreams",value:"1950s"},{label:"🌸 1960s — New Wave & rebellion",value:"1960s"},
+    {label:"🕺 1970s — New Hollywood",value:"1970s"},{label:"📼 1980s — Blockbuster era",value:"1980s"},
+    {label:"💿 1990s — Indie revolution",value:"1990s"},{label:"🎬 2000s — Digital age",value:"2000s"},
+    {label:"📱 2010s — Streaming begins",value:"2010s"},{label:"✨ 2020s — Modern cinema",value:"2020s"}]},
+  {id:"genre1",label:"MAIN GENRE",question:"Pick your lane: (Select all that apply)",multi:true,options:[
+    {label:"💥 Action / Adventure",value:"action"},{label:"🎭 Drama / Character study",value:"drama"},
+    {label:"😄 Comedy",value:"comedy"},{label:"🕵️ Thriller / Mystery / Noir",value:"thriller"},
+    {label:"🚀 Sci-Fi / Fantasy",value:"scifi"}]},
+  {id:"genre2",label:"BONUS GENRE",question:"Got a second genre itch?",multi:true,options:[
+    {label:"⚔️ War / History / Epic",value:"war_history"},{label:"👻 Horror / Creepy",value:"horror"},
+    {label:"💕 Romance / Love story",value:"romance"},{label:"📖 Biography / True story",value:"bio"},
+    {label:"🤠 Western",value:"western"},{label:"👍 Nah, first pick is fine",value:"skip"}]},
+  {id:"filmtype",label:"FILM TYPE",question:"What kind of movie are you after?",multi:true,options:[
+    {label:"🏆 Top-shelf — critically acclaimed masterpiece",value:"acclaimed"},{label:"💎 Under-the-radar — lesser-known but excellent",value:"hidden"},
+    {label:"🎉 Fun & easy — doesn't have to be deep",value:"crowd"},{label:"🔮 Weird, artsy, or cult classic",value:"cult"},
+    {label:"🤷 Not too sure — just pick something good",value:"any"}]},
+  {id:"award_category",label:"AWARD CATEGORY",question:"Any particular type of excellence?",showIf:a=>(a.filmtype||[]).includes("acclaimed"),multi:true,options:[
+    {label:"🎭 Best Picture winners or nominees",value:"best_picture"},{label:"🎬 Best Director",value:"best_director"},
+    {label:"👨‍🎤 Best Actor/Actress performances",value:"best_acting"},{label:"🎨 Best Cinematography / Visual Effects",value:"best_visuals"},
+    {label:"🎵 Best Original Score / Music",value:"best_score"},{label:"✍️ Best Screenplay / Writing",value:"best_screenplay"},
+    {label:"🌟 Any acclaimed film is fine",value:"any"}]},
+  {id:"pacing",label:"PACING",question:"How should the story move?",exclusive:true,options:[
+    {label:"🕯️ Slow burn — let it build",value:"slow"},{label:"🎵 Steady rhythm",value:"steady"},
+    {label:"🏃 Fast — hit the ground running",value:"fast"},{label:"🤷 No preference",value:"any"}]},
+  {id:"content_tone",label:"CONTENT VIBE",question:"Overall content vibe?",exclusive:true,options:[
+    {label:"☀️ Light & fun — upbeat, easy watch",value:"light"},{label:"📚 Smart & dramatic — mature themes",value:"dramatic"},
+    {label:"🌆 Gritty & intense — crime, conflict",value:"gritty"},{label:"🌑 Dark & haunting — psychological, eerie",value:"dark"}]},
+  {id:"violence",label:"VIOLENCE",question:"Violence comfort level?",exclusive:true,options:[
+    {label:"🟢 Minimal — slapstick or implied",value:"mild"},{label:"🟡 Moderate — action-movie level",value:"moderate"},
+    {label:"🟠 Strong — war scenes, real fights",value:"strong"},{label:"🔴 Severe — graphic is OK",value:"severe"}]},
+  {id:"scary",label:"SCARES",question:"How scary can it get?",exclusive:true,options:[
+    {label:"😇 Not at all",value:"none"},{label:"😬 Mild tension and suspense",value:"mild"},
+    {label:"👻 Legitimately creepy",value:"creepy"},{label:"💀 Full horror — nightmares welcome",value:"horror"}]},
+  {id:"language",label:"PROFANITY",question:"Profanity?",exclusive:true,options:[
+    {label:"🧼 Keep it clean",value:"clean"},{label:"🤷 Some is fine",value:"some"},{label:"🗣️ Doesn't bother me",value:"any"}]},
+  {id:"emotional",label:"EMOTIONAL WEIGHT",question:"How heavy can we go?",exclusive:true,options:[
+    {label:"🧊 Keep it light",value:"light"},{label:"💭 Some depth — make me care",value:"moderate"},
+    {label:"🥺 Go deep — wreck me",value:"heavy"},{label:"😭 Devastate me, I dare you",value:"devastate"}]},
+  {id:"after",label:"AFTER FEELING",question:"How do you want to feel when credits roll?",exclusive:true,options:[
+    {label:"😊 Happy and uplifted",value:"uplifted"},{label:"🌙 Thinking about life at 2am",value:"reflective"},
+    {label:"🔥 Buzzing with energy",value:"energized"},{label:"🥹 Deeply moved",value:"moved"},
+    {label:"🎬 Don't care, just make it good",value:"any"}]},
+  {id:"true_story",label:"TRUE STORY",question:"True story or fiction?",exclusive:true,options:[
+    {label:"📰 True stories hit different",value:"true"},{label:"📝 Pure fiction",value:"fiction"},
+    {label:"🤝 Either — just make it good",value:"either"}]},
+  {id:"bw",label:"BLACK & WHITE",question:"Black & white movies?",exclusive:true,options:[
+    {label:"🎩 Love 'em — classic cinema",value:"love"},{label:"👍 Sure, if it's great",value:"open"},
+    {label:"🌈 Color only tonight",value:"color"}]},
+  {id:"foreign",label:"SUBTITLES",question:"Subtitles OK tonight?",exclusive:true,options:[
+    {label:"🌍 I feel like reading tonight",value:"yes"},{label:"🇺🇸 English only tonight",value:"english"},
+    {label:"🤷 No preference",value:"any"}]},
+  {id:"wildcard",label:"FINAL PICK",question:"How should we make the final call?",exclusive:true,options:[
+    {label:"🎲 Go adventurous — surprise me with something unexpected",value:"adventurous"},
+    {label:"🎯 Play it safe — reliable pick I'll definitely enjoy",value:"reliable"},
+    {label:"👑 Just recommend the best match overall",value:"recommend"}]},
+];
+
+/* ════════════════════════════════════════════════════════════
+   API LAYER (TMDB + OMDB) with caching
+   ════════════════════════════════════════════════════════════ */
+const cache = new Map();
+
+async function tmdbSearch(title, year) {
+  const k=`s_${title}_${year}`; if(cache.has(k)) return cache.get(k);
+  try {
+    const p=new URLSearchParams({api_key:TMDB_KEY,query:title,...(year&&{year:String(year)})});
+    const r=await fetch(`${TMDB_BASE}/search/movie?${p}`); if(!r.ok) return null;
+    const m=((await r.json()).results||[])[0]; if(!m) return null;
+    const res={tmdb_id:m.id,genre_ids:m.genre_ids||[],overview:m.overview||"",poster_path:m.poster_path||"",vote_average:m.vote_average||0,vote_count:m.vote_count||0,popularity:m.popularity||0,original_language:m.original_language||"en"};
+    cache.set(k,res); return res;
+  } catch{return null;}
+}
+
+async function tmdbFull(id) {
+  const k=`f_${id}`; if(cache.has(k)) return cache.get(k);
+  try {
+    const p=new URLSearchParams({api_key:TMDB_KEY,append_to_response:"watch/providers,release_dates,images,credits"});
+    const r=await fetch(`${TMDB_BASE}/movie/${id}?${p}`); if(!r.ok) return null; const d=await r.json();
+    let cert="";
+    for(const c of(d.release_dates?.results||[])){if(c.iso_3166_1==="US"){for(const rd of c.release_dates||[]){if(rd.certification){cert=rd.certification;break;}}break;}}
+    const usP=d["watch/providers"]?.results?.US||{};
+    const res={
+      runtime:d.runtime||0,certification:cert,tagline:d.tagline||"",imdb_id:d.imdb_id||"",
+      flatrate_providers:(usP.flatrate||[]).map(p=>({id:p.provider_id,name:p.provider_name,logo:p.logo_path||""})),
+      rent_providers:(usP.rent||[]).map(p=>({id:p.provider_id,name:p.provider_name,logo:p.logo_path||""})),
+      buy_providers:(usP.buy||[]).map(p=>({id:p.provider_id,name:p.provider_name,logo:p.logo_path||""})),
+      jw_link:usP.link||"",genres_full:(d.genres||[]).map(g=>g.name),
+      posters:(d.images?.posters||[]).filter(p=>!p.iso_639_1||p.iso_639_1==="en").slice(0,5).map(p=>p.file_path),
+      cast:(d.credits?.cast||[]).slice(0,5).map(c=>c.name),
+      budget:d.budget||0,revenue:d.revenue||0,
+      production_countries:(d.production_countries||[]).map(c=>c.name),
+      spoken_languages:(d.spoken_languages||[]).map(l=>l.english_name),overview:d.overview||"",
+    };
+    cache.set(k,res); return res;
+  } catch{return null;}
+}
+
+async function omdbLookup(title, year) {
+  const k=`o_${title}_${year}`; if(cache.has(k)) return cache.get(k);
+  try {
+    const p=new URLSearchParams({t:title,...(year&&{y:String(year)}),apikey:OMDB_KEY});
+    const r=await fetch(`https://www.omdbapi.com/?${p}`); if(!r.ok) return null; const d=await r.json();
+    if(d.Response!=="True") return null;
+    const ratings={};
+    for(const rat of d.Ratings||[]){if(rat.Source.includes("Internet Movie"))ratings.imdb=rat.Value;else if(rat.Source.includes("Rotten Tomatoes"))ratings.rt=rat.Value;else if(rat.Source.includes("Metacritic"))ratings.metascore=rat.Value;}
+    const res={imdb_rating:d.imdbRating||"N/A",metascore:d.Metascore||"N/A",rt_score:ratings.rt||"N/A",rated:d.Rated||"NR",imdb_id:d.imdbID||"",awards:d.Awards||"",plot:d.Plot||"",director:d.Director||"",actors:d.Actors||""};
+    cache.set(k,res); return res;
+  } catch{return null;}
+}
+
+async function enrichMovie(movie) {
+  const data={streaming_flat:[],streaming_rent:[],streaming_buy:[],runtime:0,certification:"NR",jw_link:"",imdb_id:"",imdb_rating:"N/A",metascore:"N/A",rt_score:"N/A",rated:"NR",plot:"",director:"",actors:"",awards:"",genres_full:[],posters:[],cast:[],tagline:"",budget:0,revenue:0,production_countries:[],spoken_languages:[],overview:""};
+  if(movie.tmdb_id){const f=await tmdbFull(movie.tmdb_id);if(f){data.runtime=f.runtime;data.certification=f.certification;data.streaming_flat=f.flatrate_providers;data.streaming_rent=f.rent_providers;data.streaming_buy=f.buy_providers;data.jw_link=f.jw_link;data.imdb_id=f.imdb_id;data.genres_full=f.genres_full;data.posters=f.posters;data.cast=f.cast;data.tagline=f.tagline;data.budget=f.budget;data.revenue=f.revenue;data.production_countries=f.production_countries;data.spoken_languages=f.spoken_languages;data.overview=f.overview;}}
+  const o=await omdbLookup(movie.name,movie.year);
+  if(o){data.imdb_rating=o.imdb_rating||"N/A";data.metascore=o.metascore||"N/A";data.rt_score=o.rt_score||"N/A";data.rated=o.rated||data.certification;data.plot=o.plot||"";data.director=o.director||"";data.actors=o.actors||"";data.awards=o.awards||"";if(!data.imdb_id)data.imdb_id=o.imdb_id||"";}
+  return{...movie,...data};
+}
+
+async function fetchPopularMovies() {
+  try {
+    const all=[];
+    for(let pg=1;pg<=3;pg++){const p=new URLSearchParams({api_key:TMDB_KEY,language:"en-US",page:String(pg),sort_by:"vote_average.desc","vote_count.gte":"500","primary_release_date.lte":new Date().toISOString().split("T")[0]});const r=await fetch(`${TMDB_BASE}/discover/movie?${p}`);if(!r.ok)continue;all.push(...((await r.json()).results||[]));}
+    return all.map(m=>({name:m.title,year:m.release_date?parseInt(m.release_date.split("-")[0]):0,tmdb_id:m.id,genre_ids:m.genre_ids||[],overview:m.overview||"",poster_path:m.poster_path||"",vote_average:m.vote_average||0,vote_count:m.vote_count||0,popularity:m.popularity||0,original_language:m.original_language||"en",date_added:"",uri:""}));
+  } catch{return[];}
+}
+
+/* ════════════════════════════════════════════════════════════
+   CSV PARSER (Letterboxd, IMDb, JustWatch)
+   ════════════════════════════════════════════════════════════ */
+function parseCSV(text) {
+  if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+  const lines=text.trim().split("\n"); if(lines.length<2)return[];
+  const parseRow=l=>{const f=[];let c="",q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===","&&!q){f.push(c.trim().replace(/^"|"$/g,""));c="";}else c+=ch;}f.push(c.trim().replace(/^"|"$/g,""));return f;};
+  const hdr=parseRow(lines[0]).map(h=>h.toLowerCase());
+  const findCol=(...n)=>{for(const nm of n){const i=hdr.findIndex(h=>h.includes(nm));if(i!==-1)return i;}return-1;};
+  const titleCol=findCol("title","name","movie"),yearCol=findCol("year","release"),dateCol=findCol("date","added","created"),uriCol=findCol("uri","url","link","letterboxd");
+  const isLB=hdr.some(h=>h.includes("letterboxd")||h.includes("uri"));
+  const movies=[];
+  for(let i=1;i<lines.length;i++){const line=lines[i].trim();if(!line)continue;const f=parseRow(line);let name="",year=0,date_added="",uri="";
+    if(isLB&&f.length>=2){date_added=f[0]||"";name=f[1]||"";year=f[2]&&/^\d+$/.test(f[2])?parseInt(f[2]):0;uri=f[3]||"";}
+    else if(titleCol!==-1){name=f[titleCol]||"";year=yearCol!==-1&&f[yearCol]?parseInt(f[yearCol]):0;date_added=dateCol!==-1?f[dateCol]||"":"";uri=uriCol!==-1?f[uriCol]||"":" ";}
+    else{name=f[0]||"";year=f[1]&&/^\d{4}$/.test(f[1])?parseInt(f[1]):0;}
+    if(name){const ym=name.match(/\((\d{4})\)\s*$/);if(ym&&!year){year=parseInt(ym[1]);name=name.replace(/\s*\(\d{4}\)\s*$/,"");}movies.push({name,year,date_added,uri});}}
+  return movies;
+}
+
+/* ════════════════════════════════════════════════════════════
+   SCORING ENGINE (complete from Base44)
+   ════════════════════════════════════════════════════════════ */
+function scoreMovie(movie, answers) {
+  let score=0;const genres=new Set(movie.genre_ids||[]);const year=movie.year||2000;const vote=movie.vote_average||0;const popularity=movie.popularity||0;const runtime=movie.runtime||0;const cert=movie.certification||movie.rated||"NR";const overview=(movie.overview||movie.plot||"").toLowerCase();
+  score+=Math.min(vote*1.0,10);
+  // MOOD
+  for(const mood of(answers.my_mood||["surprise"])){
+    if(mood==="laugh"){if(genres.has(35))score+=40;if(genres.has(10751))score+=25;if(genres.has(16))score+=20;if(genres.has(18)&&!genres.has(35))score-=35;if(genres.has(10752))score-=50;if(genres.has(27))score-=30;if(genres.has(80))score-=20;if(/holocaust|genocide|concentration camp|death camp/i.test(overview))score-=80;if(/torture|suffering|tragedy|devastating/i.test(overview))score-=25;}
+    if(mood==="think"){if([18,878,9648,36].some(g=>genres.has(g)))score+=30;if(vote>=7.5)score+=10;}
+    if(mood==="feel"){if([18,10749].some(g=>genres.has(g)))score+=30;if(genres.has(35)&&!genres.has(18))score-=10;}
+    if(mood==="intense"){if([28,53,27,10752,80].some(g=>genres.has(g)))score+=30;if([35,10751].some(g=>genres.has(g))&&!genres.has(28))score-=15;}
+    if(mood==="surprise"){score+=5+Math.random()*8;}}
+  // CONTENT TONE
+  for(const t of(answers.content_tone||["dramatic"])){
+    if(t==="light"){if([...LIGHT_FUN].some(g=>genres.has(g)))score+=30;if([...HEAVY_DARK].some(g=>genres.has(g)))score-=40;if(genres.has(10752))score-=30;if(genres.has(27))score-=25;if(/holocaust|genocide|war crime|death/i.test(overview))score-=50;if(cert==="R"&&!genres.has(35))score-=15;}
+    if(t==="dramatic"&&genres.has(18))score+=20;
+    if(t==="gritty"&&[80,53,10752,28].some(g=>genres.has(g)))score+=25;
+    if(t==="dark"&&[27,53,9648,80].some(g=>genres.has(g)))score+=25;}
+  // AFTER FEELING
+  for(const af of(answers.after||["any"])){
+    if(af==="uplifted"){if([...FEEL_GOOD].some(g=>genres.has(g)))score+=25;if([27,80,10752].some(g=>genres.has(g)))score-=30;if(genres.has(18)&&!genres.has(35)&&!genres.has(10749))score-=15;if(/death|dying|tragedy|loss|grief/i.test(overview))score-=20;}
+    if(af==="reflective"&&[18,878,9648].some(g=>genres.has(g)))score+=15;
+    if(af==="energized"&&[28,12,35].some(g=>genres.has(g)))score+=15;
+    if(af==="moved"&&genres.has(18))score+=15;}
+  // EMOTIONAL WEIGHT
+  for(const e of(answers.emotional||["moderate"])){
+    if(e==="light"){if([35,12,10751,16].some(g=>genres.has(g)))score+=20;if(genres.has(18)&&vote>=7.8)score-=15;if(genres.has(10752))score-=30;if(/death|dying|tragedy|loss|grief|suffering/i.test(overview))score-=25;}
+    if((e==="heavy"||e==="devastate")&&genres.has(18)){score+=20;if(vote>=8.0)score+=10;}}
+  // GENRE
+  const g1=answers.genre1||[];if(g1.length>0){const pr=new Set(g1.flatMap(g=>GENRE_MAP[g]||[]));if([...pr].some(g=>genres.has(g)))score+=25;else{const FAM=[[28,12,53,10752],[18,36,10749],[53,9648,80,27]];for(const fm of FAM){const s=new Set(fm);if([...pr].some(g=>s.has(g))&&[...genres].some(g=>s.has(g))){score+=10;break;}}}}
+  const g2=answers.genre2||[];if(!g2.includes("skip")&&g2.length>0){const sc=new Set(g2.flatMap(g=>GENRE_MAP[g]||[]));if([...sc].some(g=>genres.has(g)))score+=12;}
+  // ERA
+  const decs=answers.decade||["any"];
+  if(!decs.includes("any")&&decs.length>0){const m=decs.some(era=>{const yd={1920:[1920,1930],1930:[1930,1940],1940:[1940,1950],1950:[1950,1960],1960:[1960,1970],1970:[1970,1980],1980:[1980,1990],1990:[1990,2000],2000:[2000,2010],2010:[2010,2020],2020:[2020,2030]};const e2=era.replace("s","");const range=yd[e2];return range&&year>=range[0]&&year<range[1];});if(m)score+=18;else score-=8;}
+  // RUNTIME
+  if(runtime>0){for(const rt of(answers.time||["any"])){if(rt==="short"){if(runtime<=100)score+=25;else if(runtime<=110)score+=5;else if(runtime<=120)score-=20;else if(runtime<=140)score-=40;else score-=60;}if(rt==="medium"){if(runtime>=95&&runtime<=140)score+=20;else if(runtime>160)score-=25;else if(runtime<85)score-=15;}if(rt==="long"){if(runtime>=140)score+=25;else if(runtime>=120)score+=10;else if(runtime<100)score-=30;}}}
+  // VIOLENCE & SCARY
+  for(const v of(answers.violence||["moderate"])){if(v==="mild"){if([10752,27].some(g=>genres.has(g)))score-=25;if(genres.has(28)&&cert==="R")score-=15;if(["R","NC-17"].includes(cert))score-=10;}}
+  for(const s of(answers.scary||["mild"])){if(s==="none"){if(genres.has(27))score-=40;if([53,9648].some(g=>genres.has(g)))score-=8;}if(s==="mild"&&genres.has(27))score-=20;if(s==="creepy"&&genres.has(27))score+=10;if(s==="horror"&&genres.has(27))score+=15;}
+  // LANGUAGE
+  for(const lp of(answers.language||["some"])){if(lp==="clean"){if(["R","NC-17"].includes(cert))score-=12;if(["G","PG"].includes(cert))score+=8;}}
+  // FILM TYPE
+  for(const ft of(answers.filmtype||["any"])){if(ft==="acclaimed"&&vote>=7.5)score+=15;if(ft==="hidden"&&popularity<30&&vote>=6.5)score+=18;if(ft==="crowd")score+=5;if(ft==="cult"&&popularity<40&&vote>=5.5&&vote<8)score+=15;if(ft==="any")score+=3;}
+  // AWARDS
+  const ac=answers.award_category||[];if((answers.filmtype||[]).includes("acclaimed")&&ac.length>0&&!ac.includes("any")){const aw=(movie.awards||"").toLowerCase();for(const c of ac){if(c==="best_picture"&&/best picture|won \d+ oscar/i.test(aw))score+=20;if(c==="best_director"&&/best director/i.test(aw))score+=15;if(c==="best_acting"&&/best actor|best actress|best supporting/i.test(aw))score+=15;if(c==="best_visuals"&&/cinematograph|visual effect/i.test(aw))score+=12;if(c==="best_score"&&/original score|original music|best music/i.test(aw))score+=12;if(c==="best_screenplay"&&/screenplay|writing/i.test(aw))score+=12;}}
+  // PACING
+  for(const p of(answers.pacing||["any"])){if(p==="slow"&&[18,36].some(g=>genres.has(g)))score+=8;if(p==="fast"&&[28,53,35].some(g=>genres.has(g)))score+=10;}
+  // TRUE STORY / B&W / SUBS
+  for(const ts of(answers.true_story||["either"])){if(ts==="true"&&[36,99].some(g=>genres.has(g)))score+=10;if(ts==="fiction"&&[878,14].some(g=>genres.has(g)))score+=8;}
+  for(const bw of(answers.bw||["open"])){if(bw==="color"&&year<1965)score-=20;if(bw==="love"&&year<1965)score+=12;}
+  for(const sub of(answers.foreign||["any"])){if(sub==="english"&&(movie.original_language||"en")!=="en")score-=30;}
+  // WILDCARD
+  for(const wc of(answers.wildcard||["recommend"])){if(wc==="adventurous"){if(popularity<25)score+=15;score+=Math.random()*15;}if(wc==="reliable"&&vote>=7.5&&popularity>30)score+=15;if(wc==="recommend")score+=vote*1.8;}
+  // WHO'S WATCHING
+  const whos=answers.who||["solo"];
+  if(whos.includes("wife")){const wG={romance_drama:new Set([18,10749]),comedy:new Set([35]),thriller:new Set([53,9648,80]),adventure:new Set([28,12])};for(const like of(answers.wife_likes||["open"])){if(like!=="open"&&wG[like])if([...wG[like]].some(g=>genres.has(g)))score+=18;}for(const av of(answers.wife_avoids||["none"])){if(av==="violent"&&[28,10752,27].some(g=>genres.has(g)))score-=25;if(av==="scary"&&genres.has(27))score-=30;if(av==="sad"&&genres.has(18)&&vote>=7.5)score-=15;if(av==="slow"&&![28,53,35].some(g=>genres.has(g)))score-=10;if(av==="weird"&&popularity<15)score-=10;}}
+  if(whos.includes("family")){if(["R","NC-17"].includes(cert))score-=50;if(genres.has(27))score-=30;if(["G","PG"].includes(cert))score+=25;if(genres.has(10751))score+=20;if(genres.has(16))score+=15;}
+  if(cert==="NC-17")score-=80;
+  // STREAMING
+  const uSvc=answers.streaming||[];const inclRent=uSvc.includes("rent");const subSvc=uSvc.filter(s=>s!=="rent");
+  if(subSvc.length>0&&movie.streaming_flat!==undefined){const flatIds=new Set((movie.streaming_flat||[]).map(p=>p.id));let has=false;for(const svc of subSvc){if((PROVIDER_MAP[svc]||[]).some(id=>flatIds.has(id))){has=true;break;}}if(has)score+=50;else if(!inclRent)score-=80;else score-=10;}
+  score+=Math.random()*8;return Math.round(score*10)/10;
+}
+
+/* ════════════════════════════════════════════════════════════
+   SERIES LOGIC
+   ════════════════════════════════════════════════════════════ */
+const SERIES_DB={"the godfather part ii":"The Godfather","the godfather part iii":"The Godfather","the dark knight":"Batman Begins","the dark knight rises":"Batman Begins","the empire strikes back":"Star Wars","return of the jedi":"Star Wars","the two towers":"The Fellowship of the Ring","the return of the king":"The Fellowship of the Ring","aliens":"Alien","alien 3":"Alien","terminator 2":"The Terminator","blade runner 2049":"Blade Runner","mad max: fury road":"Mad Max","before sunset":"Before Sunrise","before midnight":"Before Sunrise","toy story 2":"Toy Story","toy story 3":"Toy Story","toy story 4":"Toy Story","the color of money":"The Hustler","indiana jones and the temple of doom":"Raiders of the Lost Ark","indiana jones and the last crusade":"Raiders of the Lost Ark"};
+function processSeriesLogic(picks,allMovies){return picks.map(m=>{const low=(m.name||"").toLowerCase();const first=SERIES_DB[low];if(!first)return m;const orig=allMovies.find(x=>x.name&&x.name.toLowerCase()===first.toLowerCase());if(orig)return{...orig,seriesNote:`Start here! "${m.name}" was recommended, but this is the first in the series.`,originalRecommendation:m.name};return{...m,seriesNote:`Part of a series — consider starting with "${first}" first.`};});}
+
+/* ════════════════════════════════════════════════════════════
+   HELPERS
+   ════════════════════════════════════════════════════════════ */
+function fmtRT(m){if(!m)return"";const h=Math.floor(m/60),mn=m%60;return h>0?`${h}h ${mn}m`:`${mn}m`;}
+
+function getStreamInfo(movie,uSvc){
+  const flat=movie.streaming_flat||[],rent=movie.streaming_rent||[];const onSub=[],seen=new Set();
+  for(const svc of uSvc){if(svc==="rent")continue;for(const p of flat)if((PROVIDER_MAP[svc]||[]).includes(p.id)&&!seen.has(p.name)){onSub.push(p.name);seen.add(p.name);}}
+  if(onSub.length>0)return{text:`Streaming free on ${onSub.join(", ")}`,status:"available",details:"Included with your subscription"};
+  const other=flat.filter(p=>!seen.has(p.name)).slice(0,3).map(p=>p.name);
+  if(other.length>0)return{text:`Streaming on ${other.join(", ")}`,status:"other",details:"Not on your current services"};
+  const rn=[...new Set(rent.slice(0,3).map(p=>p.name))];
+  if(rn.length>0)return{text:`Rent on ${rn.join(", ")}`,status:uSvc.includes("rent")?"available":"rent",details:uSvc.includes("rent")?"Rental fee required":"Not streaming free"};
+  return{text:"Check JustWatch for availability",status:"unknown",details:""};
+}
+
+/* ════════════════════════════════════════════════════════════
+   PARENTS GUIDE VISUAL — Severity estimation from Base44
+   ════════════════════════════════════════════════════════════ */
+const SEV={none:{label:"None",cls:"bg-green-100 border-green-300 text-green-800",level:0},mild:{label:"Mild",cls:"bg-green-200 border-green-400 text-green-900",level:1},moderate:{label:"Moderate",cls:"bg-yellow-200 border-yellow-400 text-yellow-900",level:2},severe:{label:"Severe",cls:"bg-orange-200 border-orange-400 text-orange-900",level:3},extreme:{label:"Extreme",cls:"bg-red-200 border-red-400 text-red-900",level:4}};
+const CATS=[
+  {key:"sexNudity",label:"Sex & Nudity",icon:"💋",desc:{none:"No sexual content or nudity.",mild:"Brief kissing or mild romantic scenes. No nudity.",moderate:"Passionate kissing, suggestive dialogue, possible brief partial nudity.",severe:"Sex scenes with nudity, sexual dialogue, or explicit situations.",extreme:"Graphic sexual content, full nudity."}},
+  {key:"violence",label:"Violence & Gore",icon:"⚔️",desc:{none:"No violence.",mild:"Cartoon violence, mild peril, slapstick.",moderate:"Action violence, fighting, gunfire with limited blood.",severe:"Intense violence, blood, combat deaths, disturbing scenes.",extreme:"Graphic gore, torture, brutal violence."}},
+  {key:"profanity",label:"Profanity",icon:"🗣️",desc:{none:"No profanity. Clean dialogue.",mild:'Mild words like "damn" or "hell" sparingly.',moderate:"Some strong language, occasional harsher profanity.",severe:"Frequent strong profanity including F-words.",extreme:"Constant strong language, slurs, extremely vulgar."}},
+  {key:"alcohol",label:"Alcohol, Drugs & Smoking",icon:"🍺",desc:{none:"No substance use depicted.",mild:"Background drinking or brief cigarette use.",moderate:"Characters drinking socially, some drug references.",severe:"Drug use depicted, intoxication, substance abuse themes.",extreme:"Graphic drug use, addiction portrayed in detail."}},
+  {key:"frightening",label:"Frightening & Intense",icon:"😨",desc:{none:"Not scary or intense. Lighthearted.",mild:"Some tense moments, mild peril or suspense.",moderate:"Sustained tension, jump scares, emotionally heavy.",severe:"Horror elements, disturbing imagery, intense emotional content.",extreme:"Terrifying scenes, psychological horror, deeply disturbing."}}
+];
+
+function estimateSeverity(movie,catKey){
+  const cert=movie.rated||movie.certification||"NR";const genres=new Set(movie.genre_ids||[]);const ov=(movie.overview||movie.plot||"").toLowerCase();
+  const defs={G:{sexNudity:"none",violence:"none",profanity:"none",alcohol:"none",frightening:"none"},PG:{sexNudity:"none",violence:"mild",profanity:"mild",alcohol:"mild",frightening:"mild"},"PG-13":{sexNudity:"mild",violence:"moderate",profanity:"moderate",alcohol:"mild",frightening:"moderate"},R:{sexNudity:"moderate",violence:"severe",profanity:"severe",alcohol:"moderate",frightening:"severe"},"NC-17":{sexNudity:"extreme",violence:"extreme",profanity:"severe",alcohol:"moderate",frightening:"severe"},NR:{sexNudity:"moderate",violence:"moderate",profanity:"moderate",alcohol:"moderate",frightening:"moderate"}};
+  let sev=(defs[cert]||defs.NR)[catKey];
+  if(catKey==="violence"){if(genres.has(10752))sev=cert==="R"?"extreme":"severe";if(genres.has(27))sev=cert==="R"?"extreme":"severe";if(genres.has(80)&&cert==="R")sev="severe";if(/gore|bloody|brutal|massacre|torture/i.test(ov))sev="extreme";}
+  if(catKey==="sexNudity"){if(genres.has(10749)&&cert==="R")sev="severe";if(/nudity|sex scene|erotic/i.test(ov))sev=cert==="R"?"severe":"moderate";if(["G","PG"].includes(cert))sev="none";}
+  if(catKey==="profanity"){if((genres.has(35)||genres.has(80))&&cert==="R")sev="severe";if(["G","PG"].includes(cert))sev=cert==="G"?"none":"mild";}
+  if(catKey==="frightening"){if(genres.has(27))sev=cert==="R"?"extreme":"severe";if([53,9648].some(g=>genres.has(g)))sev="moderate";if(genres.has(10752))sev="severe";if(/jump scare|terrifying|nightmare|disturbing/i.test(ov))sev="severe";}
+  if(catKey==="alcohol"){if(genres.has(80))sev="moderate";if(/drug|cocaine|heroin|alcohol|drunk|smoking/i.test(ov))sev="moderate";if(["G","PG"].includes(cert))sev="none";}
+  return sev;
+}
+
+function ParentsGuide({movie}){
+  const [open,setOpen]=useState(false);const [expanded,setExpanded]=useState(null);const cert=movie.rated||movie.certification||"NR";const imdbId=movie.imdb_id||"";
+  return(
+    <div className="mb-4">
+      <button onClick={()=>setOpen(!open)} className="flex items-center gap-2 text-xs font-bold text-stone-400 uppercase tracking-wider hover:text-stone-600 transition-colors">
+        <Shield className="w-4 h-4"/>Parents Guide ({cert})<span className={`transition-transform ${open?"rotate-180":""}`}>▼</span>
+      </button>
+      {open&&(
+        <div className="mt-3 p-4 bg-stone-50 border border-stone-200 rounded-lg animate-in fade-in">
+          <div className="space-y-2 mb-4">
+            {CATS.map(cat=>{const sev=estimateSeverity(movie,cat.key);const cfg=SEV[sev];const isExp=expanded===cat.key;return(
+              <div key={cat.key}>
+                <button onClick={()=>setExpanded(isExp?null:cat.key)} className={`w-full flex items-center justify-between p-3 rounded border transition-all ${cfg.cls} hover:opacity-90`}>
+                  <span className="flex items-center gap-2 text-sm font-medium"><span>{cat.icon}</span>{cat.label}</span>
+                  <span className="flex items-center gap-2"><span className="text-xs font-bold uppercase tracking-wide">{cfg.label}</span>{isExp?<ChevronUp className="w-4 h-4"/>:<ChevronDown className="w-4 h-4"/>}</span>
+                </button>
+                {isExp&&<div className="p-3 bg-white border-x border-b border-stone-200 rounded-b text-sm text-stone-600 animate-in fade-in">{cat.desc[sev]}</div>}
+              </div>
+            );})}
+          </div>
+          <div className="flex flex-wrap gap-2 mb-3 text-xs"><span className="text-stone-500">Severity:</span>{Object.entries(SEV).map(([k,v])=><span key={k} className={`px-2 py-0.5 rounded ${v.cls} text-[10px] font-medium uppercase`}>{v.label}</span>)}</div>
+          <p className="text-xs text-stone-500 italic mb-3">⚠️ Estimated based on genre, certification, and content analysis. Check official guides for accuracy.</p>
+          <div className="flex flex-wrap gap-2">
+            {imdbId&&<a href={`https://www.imdb.com/title/${imdbId}/parentalguide`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-medium rounded hover:bg-amber-200 transition-colors"><ExtLink className="w-3 h-3"/>IMDb Parents Guide</a>}
+            <a href={`https://www.commonsensemedia.org/search?query=${encodeURIComponent(movie.name)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200 transition-colors"><ExtLink className="w-3 h-3"/>Common Sense Media</a>
+            <a href={`https://www.pluggedin.com/search-results/?q=${encodeURIComponent(movie.name)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-100 text-purple-800 text-xs font-medium rounded hover:bg-purple-200 transition-colors"><ExtLink className="w-3 h-3"/>Plugged In</a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   AWARDS DROPDOWN — parsed from OMDB awards string
+   ════════════════════════════════════════════════════════════ */
+function parseAwards(txt){
+  if(!txt||txt==="N/A")return null;const awards=[];
+  const ow=txt.match(/won (\d+) oscar/i);if(ow)awards.push({icon:"🏆",label:`Won ${ow[1]} Oscar${parseInt(ow[1])>1?"s":""}`,status:"won"});
+  const on=txt.match(/nominated for (\d+) oscar/i);if(on)awards.push({icon:"🎬",label:`${on[1]} Oscar Nomination${parseInt(on[1])>1?"s":""}`,status:"nom"});
+  const gw=txt.match(/won (\d+) golden globe/i);if(gw)awards.push({icon:"🌟",label:`Won ${gw[1]} Golden Globe${parseInt(gw[1])>1?"s":""}`,status:"won"});
+  const gn=txt.match(/(\d+) golden globe nomination/i);if(gn)awards.push({icon:"✨",label:`${gn[1]} Golden Globe Nom${parseInt(gn[1])>1?"s":""}`,status:"nom"});
+  const tw=txt.match(/(\d+) win/i);if(tw&&parseInt(tw[1])>0)awards.push({icon:"🏅",label:`${tw[1]} Total Win${parseInt(tw[1])>1?"s":""}`,status:"won"});
+  const tn=txt.match(/(\d+) nomination/i);if(tn&&parseInt(tn[1])>0)awards.push({icon:"📋",label:`${tn[1]} Total Nomination${parseInt(tn[1])>1?"s":""}`,status:"nom"});
+  return awards.length>0?awards:null;
+}
+
+function AwardsDropdown({awardsText}){
+  const [open,setOpen]=useState(false);const parsed=parseAwards(awardsText);if(!parsed)return null;
+  const hasOW=parsed.some(a=>a.label.includes("Oscar")&&a.status==="won");const hasGW=parsed.some(a=>a.label.includes("Globe")&&a.status==="won");
+  return(
+    <div className="mb-6">
+      <button onClick={()=>setOpen(!open)} className="w-full p-4 bg-gradient-to-r from-amber-50 to-amber-100/50 border-l-4 border-amber-400 hover:from-amber-100 transition-colors text-left">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Award className="w-5 h-5 text-amber-600 flex-shrink-0"/>
+            <div><h3 className="text-xs font-bold text-amber-700 uppercase tracking-wider">Awards & Recognition</h3>
+              <p className="text-stone-600 text-sm mt-0.5">{hasOW&&"🏆 Academy Award Winner"}{hasOW&&hasGW&&" · "}{hasGW&&"🌟 Golden Globe Winner"}{!hasOW&&!hasGW&&"Click to see details"}</p></div>
+          </div>
+          {open?<ChevronUp className="w-5 h-5 text-amber-600"/>:<ChevronDown className="w-5 h-5 text-amber-600"/>}
+        </div>
+      </button>
+      {open&&(
+        <div className="p-4 bg-white border-l-4 border-amber-200 border-b border-r border-stone-200 animate-in fade-in">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {parsed.map((a,i)=><div key={i} className={`flex items-center gap-3 p-3 rounded-lg ${a.status==="won"?"bg-amber-50 border border-amber-200":"bg-stone-50 border border-stone-200"}`}>
+              <span className="text-xl">{a.icon}</span><p className={`text-sm font-medium ${a.status==="won"?"text-amber-800":"text-stone-700"}`}>{a.label}</p>
+            </div>)}
+          </div>
+          <p className="mt-3 text-xs text-stone-500 italic">{awardsText}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   RESULTS FILTERS
+   ════════════════════════════════════════════════════════════ */
+const DECADE_OPTS=[{l:"1920s",v:"1920s",min:1920,max:1929},{l:"1930s",v:"1930s",min:1930,max:1939},{l:"1940s",v:"1940s",min:1940,max:1949},{l:"1950s",v:"1950s",min:1950,max:1959},{l:"1960s",v:"1960s",min:1960,max:1969},{l:"1970s",v:"1970s",min:1970,max:1979},{l:"1980s",v:"1980s",min:1980,max:1989},{l:"1990s",v:"1990s",min:1990,max:1999},{l:"2000s",v:"2000s",min:2000,max:2009},{l:"2010s",v:"2010s",min:2010,max:2019},{l:"2020s",v:"2020s",min:2020,max:2029}];
+const RT_OPTS=[{l:"Under 90 min",v:"short",max:90},{l:"90-120 min",v:"medium",min:90,max:120},{l:"120-150 min",v:"long",min:120,max:150},{l:"Over 150 min",v:"epic",min:150}];
+
+function applyFilters(movies,filters,uSvc){
+  return movies.filter(m=>{
+    if(filters.genres.length>0&&!(filters.genres.some(g=>(m.genre_ids||[]).includes(g))))return false;
+    if(filters.streaming.length>0){const fIds=new Set((m.streaming_flat||[]).map(p=>p.id));if(!filters.streaming.some(svc=>(PROVIDER_MAP[svc]||[]).some(id=>fIds.has(id))))return false;}
+    if(filters.decades.length>0){const yr=m.year||0;if(!filters.decades.some(d=>{const o=DECADE_OPTS.find(x=>x.v===d);return o&&yr>=o.min&&yr<=o.max;}))return false;}
+    if(filters.runtimes.length>0){const rt=m.runtime||0;if(rt===0)return false;if(!filters.runtimes.some(r=>{const o=RT_OPTS.find(x=>x.v===r);if(!o)return false;if(o.min&&o.max)return rt>=o.min&&rt<o.max;if(o.max)return rt<o.max;if(o.min)return rt>=o.min;return false;}))return false;}
+    return true;
+  });
+}
+
+function ResultsFilters({filters,setFilters,allMovies,userServices,expanded,setExpanded}){
+  const availGenres=useMemo(()=>{const s=new Set();allMovies.forEach(m=>(m.genre_ids||[]).forEach(id=>{if(TMDB_GENRES[id])s.add(id);}));return[...s].map(id=>({id,name:TMDB_GENRES[id]})).sort((a,b)=>a.name.localeCompare(b.name));},[allMovies]);
+  const toggle=(key,val)=>setFilters(p=>({...p,[key]:p[key].includes(val)?p[key].filter(v=>v!==val):[...p[key],val]}));
+  const cnt=filters.genres.length+filters.streaming.length+filters.decades.length+filters.runtimes.length;
+  return(
+    <div className="bg-white/90 shadow-sm border border-stone-200 overflow-hidden">
+      <button onClick={()=>setExpanded(!expanded)} className="w-full flex items-center justify-between p-4 hover:bg-stone-50 transition-colors">
+        <div className="flex items-center gap-3"><Filter className="w-5 h-5 text-stone-500"/><span className="font-semibold text-stone-800" style={{fontFamily:FONT}}>Filter Results</span>{cnt>0&&<span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 text-xs rounded-full font-medium">{cnt} active</span>}</div>
+        {expanded?<ChevronUp className="w-5 h-5 text-stone-400"/>:<ChevronDown className="w-5 h-5 text-stone-400"/>}
+      </button>
+      {expanded&&(
+        <div className="p-4 pt-0 space-y-5 border-t border-stone-100">
+          <div><h4 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">Genre</h4><div className="flex flex-wrap gap-2">{availGenres.map(({id,name})=><button key={id} onClick={()=>toggle("genres",id)} className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${filters.genres.includes(id)?"bg-emerald-500 text-white":"bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>{name}</button>)}</div></div>
+          <div><h4 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">Decade</h4><div className="flex flex-wrap gap-2">{DECADE_OPTS.map(d=><button key={d.v} onClick={()=>toggle("decades",d.v)} className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${filters.decades.includes(d.v)?"bg-amber-500 text-white":"bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>{d.l}</button>)}</div></div>
+          <div><h4 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">Runtime</h4><div className="flex flex-wrap gap-2">{RT_OPTS.map(r=><button key={r.v} onClick={()=>toggle("runtimes",r.v)} className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${filters.runtimes.includes(r.v)?"bg-purple-500 text-white":"bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>{r.l}</button>)}</div></div>
+          {cnt>0&&<button onClick={()=>setFilters({genres:[],streaming:[],decades:[],runtimes:[]})} className="w-full flex items-center justify-center gap-2 py-2 border border-stone-300 text-stone-600 text-sm hover:bg-stone-50 transition-colors"><X className="w-4 h-4"/>Clear All Filters</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   MOVIE CARD — Full card with poster, ratings, streaming, parents guide
+   ════════════════════════════════════════════════════════════ */
+const RANK_STYLES=[{border:"border-amber-400",accent:"text-amber-600",bg:"bg-amber-50",label:"TOP PICK"},{border:"border-stone-400",accent:"text-stone-600",bg:"bg-stone-50",label:"RUNNER UP"},{border:"border-amber-700",accent:"text-amber-700",bg:"bg-amber-50/50",label:"HONORABLE"}];
+
+function MovieCard({movie,rank,answers}){
+  const st=RANK_STYLES[rank]||RANK_STYLES[2];
+  const genreNames=movie.genres_full?.length>0?movie.genres_full:(movie.genre_ids||[]).map(id=>TMDB_GENRES[id]).filter(Boolean);
+  const cert=movie.rated||movie.certification||"NR";const runtime=fmtRT(movie.runtime);const imdbId=movie.imdb_id||"";const uri=movie.uri||"";
+  const stream=getStreamInfo(movie,answers.streaming||[]);const desc=movie.overview||movie.plot||"";
+  const poster=movie.poster_path?`${TMDB_IMG}/w500${movie.poster_path}`:null;
+  const hasOscar=movie.awards&&/won \d+ oscar/i.test(movie.awards);
+  const facts=[];
+  if(movie.budget>0)facts.push(`Budget: $${(movie.budget/1e6).toFixed(0)}M`);
+  if(movie.revenue>0)facts.push(`Box office: $${(movie.revenue/1e6).toFixed(0)}M worldwide`);
+  if(movie.production_countries?.length>0)facts.push(`Produced in ${movie.production_countries.slice(0,2).join(" & ")}`);
+  if(movie.spoken_languages?.length>1)facts.push(`Languages: ${movie.spoken_languages.slice(0,3).join(", ")}`);
+
+  return(
+    <article className={`bg-white border ${st.border} shadow-xl overflow-hidden`} style={{fontFamily:FONT}}>
+      <div className={`${st.bg} border-b ${st.border} px-6 py-3 flex items-center justify-between`}>
+        <span className={`text-xs font-bold tracking-[0.3em] uppercase ${st.accent}`}>{st.label}</span>
+        <span className="text-xs text-stone-400 tracking-wide">№ {rank+1}</span>
+      </div>
+      <div className="flex flex-col md:flex-row">
+        {/* Poster */}
+        <div className="md:w-56 lg:w-64 flex-shrink-0 relative bg-stone-900">
+          {poster?<img src={poster} alt={movie.name} className="w-full h-full object-cover"/>:<div className="w-full aspect-[2/3] bg-gradient-to-br from-stone-100 to-amber-50 flex items-center justify-center"><Film className="w-16 h-16 text-stone-300"/></div>}
+          {hasOscar&&<div className="absolute bottom-2 right-2 text-3xl drop-shadow-lg">🏆</div>}
+        </div>
+        {/* Content */}
+        <div className="flex-1 p-6 lg:p-8">
+          <header className="mb-6">
+            <h2 className="text-2xl lg:text-3xl font-normal tracking-tight text-stone-900 leading-tight">{movie.name}</h2>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-stone-500">
+              {movie.year>0&&<span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5"/>{movie.year}</span>}
+              {runtime&&<span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5"/>{runtime}</span>}
+              {cert!=="NR"&&<span className="px-2 py-0.5 bg-stone-100 text-stone-600 text-xs font-medium rounded">{cert}</span>}
+            </div>
+            {movie.tagline&&<p className="mt-3 text-stone-500 italic text-sm border-l-2 border-amber-400 pl-3">"{movie.tagline}"</p>}
+          </header>
+          {/* Director & Cast */}
+          {(movie.director&&movie.director!=="N/A")&&<p className="text-sm text-stone-600"><span className="text-stone-400 uppercase text-xs tracking-wider mr-2">Directed by</span><span className="font-medium">{movie.director}</span></p>}
+          {movie.cast?.length>0&&<p className="text-sm text-stone-600 mt-1"><span className="text-stone-400 uppercase text-xs tracking-wider mr-2">Starring</span>{movie.cast.slice(0,4).join(", ")}</p>}
+          {/* Genres */}
+          <div className="flex flex-wrap gap-2 mt-4 mb-5">{genreNames.slice(0,4).map(g=><span key={g} className="px-3 py-1 bg-stone-100 text-stone-600 text-xs uppercase tracking-wider">{g}</span>)}</div>
+          {/* Synopsis */}
+          {desc&&<div className="mb-6"><h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Synopsis</h3><p className="text-stone-600 leading-relaxed text-sm">{desc}</p></div>}
+          {/* Awards */}
+          <AwardsDropdown awardsText={movie.awards}/>
+          {/* Ratings */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {movie.imdb_rating&&movie.imdb_rating!=="N/A"&&<div className="p-3 bg-amber-50 border border-amber-200 rounded text-center"><div className="text-lg font-bold text-amber-700">⭐ {movie.imdb_rating}</div><div className="text-xs uppercase tracking-wider text-amber-600/70">IMDb</div></div>}
+            {movie.rt_score&&movie.rt_score!=="N/A"&&<div className="p-3 bg-red-50 border border-red-200 rounded text-center"><div className="text-lg font-bold text-red-700">🍅 {movie.rt_score}</div><div className="text-xs uppercase tracking-wider text-red-600/70">Critics</div></div>}
+            {movie.metascore&&movie.metascore!=="N/A"&&<div className="p-3 bg-sky-50 border border-sky-200 rounded text-center"><div className="text-lg font-bold text-sky-700">📊 {movie.metascore}</div><div className="text-xs uppercase tracking-wider text-sky-600/70">Metacritic</div></div>}
+            {movie.vote_average>0&&<div className="p-3 bg-indigo-50 border border-indigo-200 rounded text-center"><div className="text-lg font-bold text-indigo-700">🎬 {movie.vote_average.toFixed(1)}</div><div className="text-xs uppercase tracking-wider text-indigo-600/70">TMDB</div></div>}
+          </div>
+          {/* Streaming */}
+          <div className="mb-6 p-4 rounded-lg bg-stone-50 border border-stone-200">
+            <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Where to Watch</h3>
+            <div className={`font-medium ${stream.status==="available"?"text-emerald-700":stream.status==="other"?"text-amber-700":"text-stone-500"}`}>{stream.status==="available"&&"✓ "}{stream.text}</div>
+            {stream.details&&<p className="text-xs text-stone-500 mt-1">{stream.details}</p>}
+            {movie.jw_link&&<a href={movie.jw_link} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-xs text-stone-500 hover:text-stone-700 underline">View all options on JustWatch →</a>}
+          </div>
+          {/* Fun Facts */}
+          {facts.length>0&&<div className="mb-6"><h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-3">Did You Know?</h3>{facts.slice(0,3).map((f,i)=><p key={i} className="text-sm text-stone-600 flex items-start gap-2"><span className="text-amber-500">✦</span>{f}</p>)}</div>}
+          {/* Parents Guide */}
+          <ParentsGuide movie={movie}/>
+          {/* Series Note */}
+          {movie.seriesNote&&<div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-sm text-blue-800"><p className="font-medium">📺 {movie.seriesNote}</p>{movie.originalRecommendation&&<p className="text-blue-600 text-xs mt-1">(Originally recommended: {movie.originalRecommendation})</p>}</div>}
+          {/* Links */}
+          <div className="flex flex-wrap gap-3 mt-6 pt-6 border-t border-stone-200">
+            {imdbId&&<a href={`https://www.imdb.com/title/${imdbId}/`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 text-xs uppercase tracking-wider text-stone-600 border border-stone-300 hover:border-amber-400 hover:text-amber-700 transition-colors">IMDb →</a>}
+            {uri&&<a href={uri.startsWith("http")?uri:`https://letterboxd.com${uri}`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 text-xs uppercase tracking-wider text-stone-600 border border-stone-300 hover:border-amber-400 hover:text-amber-700 transition-colors">Letterboxd →</a>}
+            <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.name)}`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 text-xs uppercase tracking-wider text-stone-600 border border-stone-300 hover:border-amber-400 hover:text-amber-700 transition-colors">Rotten Tomatoes →</a>
+            {imdbId&&<a href={`https://www.imdb.com/title/${imdbId}/parentalguide`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 text-xs uppercase tracking-wider text-stone-600 border border-stone-300 hover:border-amber-400 hover:text-amber-700 transition-colors">Parents Guide →</a>}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   HONORABLE MENTION CARD — Expandable compact card
+   ════════════════════════════════════════════════════════════ */
+function HonorableMentionCard({movie}){
+  const [expanded,setExpanded]=useState(false);
+  const genreNames=movie.genres_full?.length>0?movie.genres_full:(movie.genre_ids||[]).map(id=>TMDB_GENRES[id]).filter(Boolean);
+  const runtime=fmtRT(movie.runtime);const cert=movie.rated||movie.certification||"NR";const desc=movie.overview||movie.plot||"";
+  return(
+    <div className="border border-stone-200 bg-white overflow-hidden" style={{fontFamily:FONT}}>
+      <button onClick={()=>setExpanded(!expanded)} className="w-full flex items-center gap-4 p-4 hover:bg-stone-50 transition-colors text-left">
+        {movie.poster_path?<img src={`${TMDB_IMG}/w92${movie.poster_path}`} alt={movie.name} className="w-14 h-20 object-cover flex-shrink-0"/>:<div className="w-14 h-20 bg-stone-200 flex items-center justify-center flex-shrink-0"><span className="text-stone-400 text-xs">No img</span></div>}
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-stone-800 truncate">{movie.name} <span className="font-normal text-stone-400">({movie.year})</span></p>
+          <p className="text-sm text-stone-500 mt-1 truncate">{genreNames.slice(0,3).join(", ")}{runtime&&` · ${runtime}`}</p>
+          <div className="flex gap-2 mt-2 flex-wrap">
+            {movie.imdb_rating&&movie.imdb_rating!=="N/A"&&<span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">⭐ {movie.imdb_rating}</span>}
+            {movie.rt_score&&movie.rt_score!=="N/A"&&<span className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded">🍅 {movie.rt_score}</span>}
+          </div>
+        </div>
+        <div className="flex-shrink-0 text-stone-400">{expanded?<ChevronUp className="w-5 h-5"/>:<ChevronDown className="w-5 h-5"/>}</div>
+      </button>
+      {expanded&&(
+        <div className="px-4 pb-4 pt-2 border-t border-stone-100 space-y-4 animate-in fade-in">
+          <div className="flex gap-4">
+            {movie.poster_path&&<img src={`${TMDB_IMG}/w185${movie.poster_path}`} alt={movie.name} className="w-24 h-36 object-cover flex-shrink-0"/>}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                {movie.year>0&&<span className="flex items-center gap-1"><Calendar className="w-3 h-3"/>{movie.year}</span>}
+                {runtime&&<span className="flex items-center gap-1"><Clock className="w-3 h-3"/>{runtime}</span>}
+                {cert!=="NR"&&<span className="px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded text-xs">{cert}</span>}
+              </div>
+              {movie.director&&movie.director!=="N/A"&&<p className="text-xs text-stone-600"><span className="text-stone-400">Dir:</span> {movie.director}</p>}
+              {movie.actors&&movie.actors!=="N/A"&&<p className="text-xs text-stone-600"><span className="text-stone-400">Cast:</span> {movie.actors}</p>}
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {movie.imdb_rating&&movie.imdb_rating!=="N/A"&&<div className="p-2 bg-amber-50 border border-amber-200 rounded text-center"><div className="text-sm font-bold text-amber-700">⭐ {movie.imdb_rating}</div><div className="text-xs text-amber-600">IMDb</div></div>}
+            {movie.rt_score&&movie.rt_score!=="N/A"&&<div className="p-2 bg-red-50 border border-red-200 rounded text-center"><div className="text-sm font-bold text-red-700">🍅 {movie.rt_score}</div><div className="text-xs text-red-600">Critics</div></div>}
+            {movie.metascore&&movie.metascore!=="N/A"&&<div className="p-2 bg-sky-50 border border-sky-200 rounded text-center"><div className="text-sm font-bold text-sky-700">📊 {movie.metascore}</div><div className="text-xs text-sky-600">Metacritic</div></div>}
+            {movie.vote_average>0&&<div className="p-2 bg-indigo-50 border border-indigo-200 rounded text-center"><div className="text-sm font-bold text-indigo-700">🎬 {movie.vote_average.toFixed(1)}</div><div className="text-xs text-indigo-600">TMDB</div></div>}
+          </div>
+          {desc&&<div><h4 className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">Synopsis</h4><p className="text-sm text-stone-600 leading-relaxed">{desc}</p></div>}
+          {movie.awards&&movie.awards!=="N/A"&&<div className="p-3 bg-amber-50 border-l-4 border-amber-400"><div className="flex items-start gap-2"><Award className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"/><div><h4 className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-1">Awards</h4><p className="text-sm text-stone-700">{movie.awards}</p></div></div></div>}
+          <div className="p-3 bg-stone-50 border-l-4 border-stone-300"><div className="flex items-start gap-2"><Shield className="w-4 h-4 text-stone-500 flex-shrink-0 mt-0.5"/><div><h4 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">Rating: {cert}</h4><p className="text-xs text-stone-500">{({G:"General Audiences",PG:"Parental Guidance Suggested","PG-13":"Parents Strongly Cautioned — Some material may be inappropriate for children under 13",R:"Restricted — Under 17 requires parent/guardian","NC-17":"Adults Only",NR:"Not Rated — Content varies"})[cert]||"Not Rated"}</p></div></div></div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            {movie.imdb_id&&<a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" className="text-xs text-stone-600 border border-stone-300 px-3 py-1.5 hover:border-amber-400 hover:text-amber-700 transition-colors">IMDb →</a>}
+            {movie.uri&&<a href={movie.uri.startsWith("http")?movie.uri:`https://letterboxd.com${movie.uri}`} target="_blank" rel="noopener noreferrer" className="text-xs text-stone-600 border border-stone-300 px-3 py-1.5 hover:border-amber-400 hover:text-amber-700 transition-colors">Letterboxd →</a>}
+            {movie.imdb_id&&<a href={`https://www.imdb.com/title/${movie.imdb_id}/parentalguide`} target="_blank" rel="noopener noreferrer" className="text-xs text-stone-600 border border-stone-300 px-3 py-1.5 hover:border-amber-400 hover:text-amber-700 transition-colors">Parents Guide →</a>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   POSTER GALLERY
+   ════════════════════════════════════════════════════════════ */
+function PosterGallery({picks,runnerUps}){
+  const all=[...(picks||[]),...(runnerUps||[])].filter(m=>m.poster_path);if(all.length===0)return null;
+  return(
+    <div className="bg-stone-50 border border-stone-200 p-6" style={{fontFamily:FONT}}>
+      <h3 className="text-xs font-bold text-stone-500 uppercase tracking-wider mb-4 text-center">Your Picks at a Glance</h3>
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+        {all.map(m=><div key={m.tmdb_id||m.name} className="group relative aspect-[2/3] overflow-hidden shadow-md hover:shadow-xl transition-shadow">
+          <img src={`${TMDB_IMG}/w342${m.poster_path}`} alt={m.name} className="w-full h-full object-cover"/>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute bottom-0 left-0 right-0 p-2"><p className="text-white text-xs font-semibold truncate">{m.name}</p><p className="text-white/70 text-xs">{m.year}</p></div>
+          </div>
+        </div>)}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   MAIN APP
+   ════════════════════════════════════════════════════════════ */
+function LindellMoviePicker() {
+  const [step,setStep]=useState("upload");
+  const [movies,setMovies]=useState([]);
+  const [results,setResults]=useState(null);
+  const [answers,setAnswers]=useState({streaming:[],decade:["any"]});
+  const [qIdx,setQIdx]=useState(0);
+  const [loading,setLoading]=useState(false);
+  const [loadMsg,setLoadMsg]=useState("");
+  const [progress,setProgress]=useState(0);
+  const [file,setFile]=useState(null);
+  const [parsed,setParsed]=useState([]);
+  const [dragOver,setDragOver]=useState(false);
+  const [filtersExpanded,setFiltersExpanded]=useState(false);
+  const [filters,setFilters]=useState({genres:[],streaming:[],decades:[],runtimes:[]});
+  const excludedRef=useRef(new Set());
+
+  // FILE
+  const handleFile=useCallback(f=>{const r=new FileReader();r.onload=e=>{setParsed(parseCSV(e.target.result));setFile(f);};r.readAsText(f);},[]);
+  const handleDrop=useCallback(e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files?.[0];if(f&&f.name.endsWith(".csv"))handleFile(f);},[handleFile]);
+
+  // ENRICH
+  const enrichCSV=useCallback(async()=>{
+    setLoading(true);setStep("loading");setProgress(0);const en=[];let batch=0;
+    for(let i=0;i<parsed.length;i++){setLoadMsg(parsed[i].name);const t=await tmdbSearch(parsed[i].name,parsed[i].year);en.push({...parsed[i],...(t||{tmdb_id:null,genre_ids:[],overview:"",poster_path:"",vote_average:0,vote_count:0,popularity:0,original_language:"en"})});batch++;if(batch>=38){await new Promise(r=>setTimeout(r,500));batch=0;}setProgress(Math.round(((i+1)/parsed.length)*100));}
+    setMovies(en);excludedRef.current=new Set();setLoading(false);setStep("quiz");setQIdx(0);
+  },[parsed]);
+
+  const skipUpload=useCallback(async()=>{setLoading(true);setStep("loading");setLoadMsg("Loading popular films...");const p=await fetchPopularMovies();setMovies(p);setLoading(false);setStep("quiz");setQIdx(0);},[]);
+
+  const feelingLucky=useCallback(async()=>{
+    setLoading(true);setStep("loading");setLoadMsg("Rolling the dice...");
+    let ml=movies;if(ml.length===0){ml=await fetchPopularMovies();setMovies(ml);}
+    const ra={streaming:answers.streaming||["rent"],decade:["any"],wildcard:["adventurous"]};
+    const sc=ml.map(m=>({score:scoreMovie(m,ra)+Math.random()*40,movie:m})).sort((a,b)=>b.score-a.score);
+    const top=[];for(const{movie}of sc.slice(0,6)){setLoadMsg(movie.name);top.push(await enrichMovie(movie));}
+    const pr=processSeriesLogic(top,ml).sort(()=>Math.random()-0.5);
+    setAnswers(ra);setResults({picks:pr.slice(0,3),runnerUps:pr.slice(3,6)});setLoading(false);setStep("results");
+  },[movies,answers.streaming]);
+
+  // QUIZ
+  const visibleQs=useMemo(()=>QZ.filter(q=>!q.showIf||q.showIf(answers)),[answers]);
+  const currentQ=visibleQs[qIdx];const quizPct=Math.round(((qIdx+1)/visibleQs.length)*100);
+  const quote=QUOTES[qIdx%QUOTES.length];
+
+  const handleSelect=useCallback((qId,value,isExcl,isAny,hasAny)=>{
+    setAnswers(prev=>{const cur=prev[qId]||[];
+      if(isExcl)return{...prev,[qId]:cur.includes(value)?[]:[value]};
+      if(isAny)return{...prev,[qId]:cur.includes(value)?[]:[value]};
+      const filt=hasAny?cur.filter(v=>v!=="any"):cur;
+      return{...prev,[qId]:cur.includes(value)?cur.filter(v=>v!==value):[...filt,value]};});
+  },[]);
+
+  const submitQuiz=useCallback(async()=>{
+    setLoading(true);setStep("loading");setLoadMsg("Curating your picks...");
+    const sc=movies.map(m=>({score:scoreMovie(m,answers)+Math.random()*8,movie:m})).sort((a,b)=>b.score-a.score);
+    const top=[];for(const{movie}of sc.slice(0,8)){setLoadMsg(movie.name);top.push(await enrichMovie(movie));}
+    const final=top.map(m=>({score:scoreMovie(m,answers)+Math.random()*5,movie:m})).sort((a,b)=>b.score-a.score);
+    const picks=processSeriesLogic(final.slice(0,3).map(s=>s.movie),movies);
+    const ru=processSeriesLogic(final.slice(3,6).map(s=>s.movie),movies);
+    [...picks,...ru].forEach(m=>excludedRef.current.add(m.tmdb_id||m.name));
+    setResults({picks,runnerUps:ru});setLoading(false);setStep("results");
+  },[movies,answers]);
+
+  const refreshResults=useCallback(async()=>{
+    setLoading(true);setLoadMsg("Finding more...");
+    const avail=movies.filter(m=>!excludedRef.current.has(m.tmdb_id||m.name));const pool=avail.length>=6?avail:movies;
+    const sc=pool.map(m=>({score:scoreMovie(m,answers)+Math.random()*25,movie:m})).sort((a,b)=>b.score-a.score);
+    const top=[];for(const{movie}of sc.slice(0,6)){setLoadMsg(movie.name);top.push(await enrichMovie(movie));}
+    const pr=processSeriesLogic(top,movies);[...pr].forEach(m=>excludedRef.current.add(m.tmdb_id||m.name));
+    setResults({picks:pr.slice(0,3),runnerUps:pr.slice(3,6)});setLoading(false);
+  },[movies,answers]);
+
+  // FILTER results
+  const uSvc=answers.streaming||[];
+  const filteredPicks=useMemo(()=>applyFilters(results?.picks||[],filters,uSvc),[results,filters,uSvc]);
+  const filteredRU=useMemo(()=>applyFilters(results?.runnerUps||[],filters,uSvc),[results,filters,uSvc]);
+  const hasActiveFilters=filters.genres.length+filters.streaming.length+filters.decades.length+filters.runtimes.length>0;
+  const allResultMovies=[...(results?.picks||[]),...(results?.runnerUps||[])];
+
+  return(
+    <div className="min-h-screen bg-gradient-to-b from-stone-50 to-amber-50/30" style={{fontFamily:FONT}}>
+      <div className="max-w-3xl mx-auto px-4">
+        {/* HEADER */}
+        <div className="text-center py-10 border-b border-stone-200">
+          <div className="text-4xl mb-2">🎬</div>
+          <h1 className="text-3xl font-normal tracking-tight text-stone-900">The Lindell Movie Picker</h1>
+          <div className="w-12 h-0.5 bg-amber-500 mx-auto mt-3"/>
+          <p className="text-xs tracking-[0.25em] text-stone-400 uppercase mt-3">A Father-Daughter Film Companion</p>
+        </div>
+
+        {/* ══ UPLOAD ══ */}
+        {step==="upload"&&(
+          <div className="max-w-xl mx-auto mt-8">
+            <p className="text-center text-stone-400 text-xs tracking-widest uppercase mb-4">Quick Start</p>
+            <div className="flex flex-col sm:flex-row gap-3 mb-8">
+              <button onClick={feelingLucky} className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-amber-500 hover:bg-amber-600 text-white font-medium tracking-wide transition-colors"><Shuffle className="w-5 h-5"/>I'm Feeling Lucky</button>
+              <button onClick={skipUpload} className="flex-1 flex items-center justify-center gap-2 px-6 py-4 border-2 border-stone-300 hover:border-amber-400 hover:bg-amber-50 text-stone-700 font-medium tracking-wide transition-colors"><Search className="w-5 h-5"/>Browse Popular Films</button>
+            </div>
+            <div className="relative mb-8"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-stone-200"/></div><div className="relative flex justify-center"><span className="bg-stone-50 px-4 text-xs tracking-widest text-stone-400 uppercase">or upload watchlist</span></div></div>
+            <div className="bg-white p-8 shadow-xl border border-stone-200">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 border-2 border-amber-400 rounded-full flex items-center justify-center mx-auto mb-4"><Upload className="w-7 h-7 text-amber-600"/></div>
+                <h2 className="text-2xl font-normal text-stone-800 tracking-tight">Upload Your Watchlist</h2>
+                <div className="w-12 h-0.5 bg-amber-400 mx-auto mt-3 mb-3"/>
+                <p className="text-stone-500 text-sm leading-relaxed">Supports <strong>Letterboxd</strong>, <strong>IMDb</strong>, and <strong>JustWatch</strong> exports</p>
+              </div>
+              {!file&&(
+                <>
+                  <div className={`border-2 border-dashed p-10 text-center transition-all cursor-pointer ${dragOver?"border-amber-400 bg-amber-50":"border-stone-300 hover:border-amber-400"}`}
+                    onDrop={handleDrop} onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)} onClick={()=>document.getElementById("csv-up").click()}>
+                    <FileText className="w-10 h-10 text-stone-300 mx-auto mb-3"/><p className="text-stone-700 font-medium">Drop your CSV here</p><p className="text-stone-400 text-sm mt-1">or click to browse</p>
+                    <input id="csv-up" type="file" accept=".csv" onChange={e=>e.target.files?.[0]&&handleFile(e.target.files[0])} className="hidden"/>
+                  </div>
+                  <div className="relative my-8"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-stone-200"/></div><div className="relative flex justify-center"><span className="bg-white px-4 text-xs tracking-widest text-stone-400 uppercase">or</span></div></div>
+                  <button onClick={skipUpload} className="w-full py-6 border-2 border-stone-300 hover:bg-amber-50 hover:border-amber-400 text-stone-700 transition-all flex items-center justify-center gap-2"><Search className="w-5 h-5"/>No CSV? Browse Popular Films</button>
+                </>
+              )}
+              {file&&!loading&&(
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 p-5 bg-amber-50 border border-amber-200">
+                    <div className="w-12 h-12 border-2 border-amber-400 rounded-full flex items-center justify-center"><Film className="w-5 h-5 text-amber-600"/></div>
+                    <div><p className="font-medium text-stone-800 text-lg">{parsed.length} films found</p><p className="text-stone-500 text-sm">Ready to enrich with metadata</p></div>
+                  </div>
+                  <button onClick={enrichCSV} className="w-full py-6 bg-stone-900 hover:bg-stone-800 text-white font-medium text-base tracking-wide">Continue →</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ══ LOADING ══ */}
+        {step==="loading"&&(
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="text-5xl mb-4 animate-spin">🎬</div>
+            <p className="text-stone-600">{loadMsg||"Loading..."}</p>
+            {progress>0&&(<div className="w-64 mt-4"><div className="w-full bg-stone-200 h-1"><div className="bg-amber-500 h-1 transition-all duration-500" style={{width:`${progress}%`}}/></div><p className="text-sm text-stone-500 mt-2 text-center">{progress}%</p></div>)}
+          </div>
+        )}
+
+        {/* ══ QUIZ ══ */}
+        {step==="quiz"&&currentQ&&(
+          <div className="max-w-xl mx-auto mt-6 space-y-6">
+            <div className="w-full bg-stone-200 h-0.5"><div className="bg-amber-500 h-0.5 transition-all duration-500" style={{width:`${quizPct}%`}}/></div>
+            <div className="flex justify-between items-center text-xs text-stone-400"><span className="tracking-widest uppercase">{qIdx+1} of {visibleQs.length}</span><span>{movies.length} films · {movies.filter(m=>m.tmdb_id).length} matched</span></div>
+            {/* Quote */}
+            <div className="text-center py-4 border-y border-amber-200 bg-amber-50/50"><p className="text-stone-600 italic text-base md:text-lg">"{quote.q}"</p><p className="text-amber-600 text-sm mt-2 tracking-wide">— {quote.f} ({quote.y})</p></div>
+            {/* Question Card */}
+            <div className="bg-white p-8 md:p-10 shadow-xl border border-stone-200">
+              <div className="text-xs text-amber-600 tracking-[0.2em] uppercase mb-4">{currentQ.label}</div>
+              <h3 className="text-xl md:text-2xl font-normal text-stone-800 mb-8 leading-relaxed">{currentQ.question}</h3>
+              <div className={`grid gap-3 ${currentQ.options.length>6?"grid-cols-1 sm:grid-cols-2":"grid-cols-1 sm:grid-cols-2"}`}>
+                {currentQ.options.map(opt=>{const sel=(answers[currentQ.id]||[]).includes(opt.value);return(
+                  <label key={opt.value} onClick={()=>handleSelect(currentQ.id,opt.value,currentQ.exclusive,opt.isAny,currentQ.hasAny)}
+                    className={`flex items-center gap-3 p-4 border-2 cursor-pointer transition-all ${sel?"border-amber-400 bg-amber-50":"border-stone-200 hover:border-amber-300"} ${opt.isAny?"col-span-full sm:col-span-2 bg-stone-50":""}`}>
+                    <div className={`w-5 h-5 border-2 rounded-sm flex items-center justify-center flex-shrink-0 ${sel?"border-amber-500 bg-amber-500 text-white":"border-stone-300"}`}>{sel&&<span className="text-xs">✓</span>}</div>
+                    <span className="text-sm text-stone-700">{opt.label}</span>
+                  </label>
+                );})}
+              </div>
+            </div>
+            {/* Nav */}
+            <div className="flex gap-4 pt-4">
+              <button onClick={()=>qIdx===0?setStep("upload"):setQIdx(p=>p-1)} className="flex-1 py-6 border-2 border-stone-300 text-stone-600 hover:border-stone-400 flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4"/>Back</button>
+              {qIdx<visibleQs.length-1?
+                <button onClick={()=>setQIdx(p=>p+1)} className="flex-[2] py-6 bg-stone-900 hover:bg-stone-800 text-white font-medium tracking-wide flex items-center justify-center gap-2">Continue<ArrowRight className="w-4 h-4"/></button>:
+                <button onClick={submitQuiz} disabled={loading} className="flex-[2] py-6 bg-stone-900 hover:bg-stone-800 text-white font-medium tracking-wide">{loading?<><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Curating...</>:"Find My Film →"}</button>
+              }
+            </div>
+          </div>
+        )}
+
+        {/* ══ RESULTS ══ */}
+        {step==="results"&&results&&(
+          <div className="mt-6 space-y-8">
+            <div className="text-center py-8">
+              <p className="text-xs tracking-[0.3em] text-stone-400 uppercase mb-3">Your Curated Selection</p>
+              <h2 className="text-3xl md:text-4xl font-normal text-stone-900 tracking-tight">Tonight's <span className="italic">Picks</span></h2>
+              <div className="w-12 h-0.5 bg-amber-500 mx-auto mt-4 mb-4"/>
+              <p className="text-stone-500 text-sm">From {movies.length>0?"your watchlist":"popular films"} — curated with care.</p>
+            </div>
+            {/* Filters */}
+            <ResultsFilters filters={filters} setFilters={setFilters} allMovies={allResultMovies} userServices={uSvc} expanded={filtersExpanded} setExpanded={setFiltersExpanded}/>
+            {hasActiveFilters&&<p className="text-sm text-stone-500 text-center">Showing {filteredPicks.length+filteredRU.length} of {allResultMovies.length} movies</p>}
+            {/* Top Picks */}
+            {filteredPicks.length>0?<div className="space-y-6">{filteredPicks.map((m,i)=><MovieCard key={m.tmdb_id||m.name} movie={m} rank={i} answers={answers}/>)}</div>:hasActiveFilters&&<div className="bg-stone-50 p-8 text-center border border-stone-200"><p className="text-stone-500">No top picks match your filters. Try adjusting them.</p></div>}
+            {/* Honorable Mentions */}
+            {filteredRU.length>0&&(
+              <div className="space-y-4">
+                <div className="text-center"><p className="text-xs tracking-[0.2em] text-stone-400 uppercase mb-2">Also Worth Considering</p><h3 className="text-xl font-normal text-stone-800">Honorable Mentions</h3><div className="w-8 h-0.5 bg-amber-500 mx-auto mt-3"/><p className="text-stone-400 text-sm mt-2 italic">Click any film to see full details</p></div>
+                <div className="space-y-2">{filteredRU.slice(0,3).map(m=><HonorableMentionCard key={m.tmdb_id||m.name} movie={m}/>)}</div>
+              </div>
+            )}
+            {/* Poster Gallery */}
+            <PosterGallery picks={filteredPicks} runnerUps={filteredRU.slice(0,3)}/>
+            {/* Quote */}
+            <div className="text-center py-6 border-y border-amber-200 bg-amber-50/50"><p className="text-stone-600 italic text-base md:text-lg">"{QUOTES[17].q}"</p><p className="text-amber-600 text-sm mt-2 tracking-wide">— {QUOTES[17].f} ({QUOTES[17].y})</p></div>
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-4 pt-4 pb-8">
+              <button onClick={refreshResults} disabled={loading} className="flex-1 py-6 border-2 border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-700 tracking-wide flex items-center justify-center gap-2">{loading?<Loader2 className="w-4 h-4 animate-spin"/>:<RefreshCw className="w-4 h-4"/>}{loading?"Finding more...":"Show Different Options"}</button>
+              <button onClick={()=>{setStep("quiz");setQIdx(0);}} className="flex-1 py-6 border-2 border-stone-300 hover:border-amber-400 hover:bg-amber-50 text-stone-700 tracking-wide flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4"/>Change My Answers</button>
+              <button onClick={()=>{setStep("upload");setFile(null);setParsed([]);setResults(null);setFilters({genres:[],streaming:[],decades:[],runtimes:[]});}} className="flex-1 py-6 border-2 border-stone-300 hover:border-amber-400 hover:bg-amber-50 text-stone-700 tracking-wide flex items-center justify-center gap-2"><Upload className="w-4 h-4"/>New Watchlist</button>
+            </div>
+          </div>
+        )}
+
+        {/* FOOTER */}
+        <div className="text-center py-6 border-t border-stone-200 mt-8">
+          <p className="text-xs text-stone-400 tracking-widest">THE LINDELL MOVIE PICKER · Built for movie nights that matter</p>
+          <p className="text-[10px] text-stone-300 mt-1">Powered by TMDB & OMDB · Data subject to availability</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// Mount the app
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(LindellMoviePicker));
+  </script>
+</body>
+</html>
